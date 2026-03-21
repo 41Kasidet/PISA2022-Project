@@ -1,0 +1,1460 @@
+---
+title: "Regression_PISA2022_Result_15_March_2026"
+format: pdf
+editor: visual
+---
+
+# Executive Summary
+
+-   When we fit linear regression model and add every independence variable, almost every **X** have significant to Math Score, Reading Score and Science Score at 99% except occupation dummy. I think It's consequence of heteroscedasticity problem and observation is large
+
+-   These model violate heteroscedasticity (Constant Variance of Residual) and linearity obviously. I think we can fix model by weighted regression model for tackle heteroscedasticity problem.
+
+-   High Missing Rate still data set problem but not significant to distribution for each independent variables.
+
+# Intro
+
+For Dependence Variable, we have 3 variables
+
+1.  Math_Score
+2.  Reading_Score
+3.  Science_Score
+
+For Independence Variable, we can categorize by 2 groups
+
+1.  Student and Family Profile
+2.  School Factor
+
+According to Student and Family Profile we have 10 Variables
+
+1.  International Grade (Dummy); we set Grade 7-8 student to base group
+2.  Socio - Econ - Status Index
+3.  Education_Father (Dummy); we set who attain elementary - not elementary qualification to base group
+4.  Education_Mother (Dummy); we set who attain elementary - not elementary qualification to base group
+5.  Occupation_Father (Dummy); we set low skill labor to base group
+6.  Occupation_Mother (Dummy); we set low skill labor to base group
+7.  Resource_Household_Computer (Dummy); we set 'resource not available in home' is base group
+8.  Resource_Household_Software (Dummy); we set 'resource not available in home' is base group
+9.  Resource_Household_Phone_access_Internet (Dummy); we set 'resource not available in home' is base group
+10. Resource_Household_WIFI (Dummy); we set 'resource not available in home' is base group
+
+According to School Factor we have 5 Variables
+
+1.  School_Type (Dummy); we set student who study in public school is base group
+2.  School_Size
+3.  School_Student_Teacher_Ratio
+4.  Funding_by_Gov
+5.  Funding_by_Fee_or_Charge
+
+# Data Manipulation
+
+```{r}
+df <- read.csv("D:/Part_Time_with_Kiatanun/PISA_2022_Dataset_Selected_Columns.csv")
+library(ggplot2)
+
+df$Gender <- factor(df$Gender,
+                    levels = c(1,2),
+                    labels = c('girl','boy')) 
+
+## International_Grade; We Winsorize extream value but low frequency for appropiate group
+df$International_Grade[df$International_Grade > 90] <- NA
+df$International_Grade[df$International_Grade <= 8] <- 8
+df$International_Grade[df$International_Grade >= 12] <- 12
+# We Set Grade 8 and below to Base Group
+df$International_Grade <- factor(df$International_Grade,
+                                 levels = c(8,9,10,11,12),
+                                 labels = c('G7-8','G9','G10','G11','G12+'))
+
+# We Set Lack Resource Group to base group
+df$Resource_Household_Computer <- factor(df$Resource_Household_Computer,
+                                         levels = c(2,1),
+                                         labels = c('No','Avalible'))
+
+df$Resource_Household_Software <- factor(df$Resource_Household_Software,
+                                         levels = c(2,1),
+                                         labels = c('No','Avalible'))
+
+df$Resource_Household_Phone_Access_Internet <- factor(df$Resource_Household_Phone_Access_Internet,
+                                         levels = c(2,1),
+                                         labels = c('No','Avalible'))
+
+df$Resource_Household_WIFI <- factor(df$Resource_Household_WIFI,
+                                         levels = c(2,1),
+                                        labels = c('No','Avalible'))
+
+## Parent Schooling; We Winsorize extream value but low frequency for appropiate group
+df$Education_Father[df$Education_Father > 4] <- 4
+df$Education_Mother[df$Education_Mother > 4] <- 4
+
+# We Set ISCED < level 2 to base group
+df$Education_Father <- factor(df$Education_Father,
+                              levels = c(4,1,2,3),
+                              labels = c('<ISCED 2',
+                                         'ISCED 3.4',
+                                         'ISCED 3.3',
+                                         'ISCED 2'))
+
+df$Education_Mother <- factor(df$Education_Mother,
+                              levels = c(4,1,2,3),
+                              labels = c('<ISCED 2',
+                                         'ISCED 3.4',
+                                         'ISCED 3.3',
+                                         'ISCED 2'))
+
+# We Set Public School to base group
+df$School_Type <- factor(df$School_Type,
+                         levels = c(3,1,2),
+                         labels = c('Public',
+                                    'Private',
+                                    'Private-Gov Dependence'))
+
+# We Set Urban Student to base group 
+
+df$School_Location_Urban.Rural_1 <- factor(
+  df$School_Location_Urban.Rural_1, levels = c(2,1),
+                                    labels = c("Urban",'Rural')
+)
+
+df$School_Location_Urban.Rural_2 <- factor(
+  df$School_Location_Urban.Rural_2, levels = c(2,1),
+                                    labels = c('Urban','Rural')
+)
+
+
+# We set Low skill labour to base group
+
+df$Occupation_Father_Category <- factor(
+  df$Occupation_Father_Category,levels = c(9,0,1,2),
+                                labels = c('Low','ArmedForce',
+                                           'High','Middle')
+)
+
+df$Occupation_Mother_Category <- factor(
+  df$Occupation_Mother_Category,levels = c(9,0,1,2),
+                                labels = c('Low','ArmedForce',
+                                          'High','Middle')
+)
+```
+
+# Descriptive
+
+## Dependence Variable
+
+### Basic Statistics
+
+```{r}
+print("Math_Score Descriptive")
+summary(df$Math_Score)
+```
+
+```{r}
+print("Reading_Score Descriptive")
+summary(df$Reading_Score)
+```
+
+```{r}
+print("Science_Score Descriptive")
+summary(df$Science_Score)
+```
+
+### Histogram
+
+For every test, score distribution almost like normal distribution
+
+```{r}
+
+par(mfrow = c(2,2))
+
+hist(df$Math_Score, col = "red", main = 'Math')
+
+hist(df$Reading_Score, col = "green", main = 'Reading')
+
+hist(df$Science_Score, col = "blue", main = 'Science')
+```
+
+### Box Plot
+
+```{r}
+boxplot(df$Math_Score, df$Reading_Score, df$Science_Score,
+        names = c("Math", "Reading", "Science"))
+```
+
+## Independence Variable (Numeric)
+
+### Basic Statistics
+
+```{r}
+print("Socio - Econ - Status Index Descriptive")
+summary(df$Socio_Econ_Status_Index)
+```
+
+```{r}
+print("School_Size Descriptive")
+summary(df$School_Size)
+```
+
+```{r}
+print("School_Student_Teacher_Ratio Descriptive")
+summary(df$School_Student_Teacher_Ratio)
+```
+
+```{r}
+print("Funding_by_Gov Descriptive")
+summary(df$Funding_by_Gov)
+```
+
+```{r}
+print("Funding_by_Fee_or_Charge Descriptive")
+summary(df$Funding_by_Fee_or_Charge)
+```
+
+### Histogram
+
+```{r}
+par(mfrow = c(2,3))
+
+hist(df$Socio_Econ_Status_Index, main = 'Socio_Econ_Status_Index')
+
+hist(df$School_Size, main = 'School_Size')
+
+hist(df$School_Student_Teacher_Ratio, main = 'School_Student_Teacher_Ratio')
+
+hist(df$Funding_by_Gov, main = 'Funding_by_Gov')
+
+hist(df$Funding_by_Fee_or_Charge, main = 'Funding_by_Fee_or_Charge')
+```
+
+### Box Plot
+
+```{r}
+par(mfrow = c(2,3))
+
+boxplot(df$Socio_Econ_Status_Index, main = 'Socio_Econ_Status_Index')
+
+boxplot(df$School_Size, main = 'School_Size')
+
+boxplot(df$School_Student_Teacher_Ratio, main = 'School_Student_Teacher_Ratio')
+
+boxplot(df$Funding_by_Gov, main = 'Funding_by_Gov')
+
+boxplot(df$Funding_by_Fee_or_Charge, main = 'Funding_by_Fee_or_Charge')
+```
+
+## Independence Variable (Category)
+
+```{r}
+count <- table(df$International_Grade)
+barplot(count, main = 'International Grade')
+```
+
+```{r}
+count <- table(df$Education_Father)
+barplot(count,main = 'Father Highest Education')
+```
+
+```{r}
+count <- table(df$Education_Mother)
+barplot(count,main = 'Mother Highest Education')
+```
+
+```{r}
+count <- table(df$Occupation_Father_Category)
+barplot(count,main = 'Occupation_Father_Category')
+```
+
+```{r}
+count <- table(df$Occupation_Mother_Category)
+barplot(count,main = 'Occupation_Mother_Category')
+```
+
+```{r}
+par(mfrow = c(2,2))
+
+count <- table(df$Resource_Household_Computer)
+barplot(count,main = 'Resource_Household_Computer')
+
+count <- table(df$Resource_Household_Software)
+barplot(count,main = 'Resource_Household_Software')
+
+count <- table(df$Resource_Household_Phone_Access_Internet)
+barplot(count,main = 'Resource_Household_Phone_Access_Internet')
+
+count <- table(df$Resource_Household_WIFI)
+barplot(count,main = 'Resource_Household_WIFI')
+```
+
+```{r}
+count <- table(df$School_Type)
+barplot(count,main = 'School_Type')
+```
+
+## Check Independence Variables Distribution (Non Missing Only)
+
+When we fit model observation contain at least 1 missing value will drop from model. it would impact to data distribution and lead to bias.
+
+For detect this problem we will compare independence variable 3 distribution per variable.
+
+1.  Original Data Distribution
+2.  Including in Reading & Science Model (Missing Count = 0)
+3.  Including in Mathematic Model (Missing Count = 0 & PRY, KHM, GTM and VNM excluded because these country don't have math score.)
+
+```{r}
+Indepdence_Var <- c("School_Location_Urban.Rural_2",
+                    "International_Grade",
+                    "Socio_Econ_Status_Index",
+                    "Education_Father",
+                    "Education_Mother",
+                    "Occupation_Father_Category",
+                    "Occupation_Mother_Category",
+                    "Resource_Household_Computer",
+                    "Resource_Household_Software",
+                    "Resource_Household_Phone_Access_Internet",
+                    "Resource_Household_WIFI",
+                    "School_Type","School_Size",
+                    "School_Student_Teacher_Ratio",
+                    "Funding_by_Gov",
+                    "Funding_by_Fee_or_Charge",
+                    "Staff_Shortage",
+                    "Material_Shortage")
+
+df$missing_count <- rowSums(is.na(df[, Indepdence_Var]))
+```
+
+### Numeric Variable
+
+Socio-Econ Index
+
+```{r}
+hist(df$Socio_Econ_Status_Index, col = rgb(0, 0, 0, 0.0), 
+     main = "Histogram of Socio_Econ_Status_Index Comparison", 
+     xlab = "Socio_Econ_Status_Index", border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$Socio_Econ_Status_Index, na.rm = TRUE), col = "blue", lwd = 2)
+
+hist(df$Socio_Econ_Status_Index[df$missing_count == 0], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$Socio_Econ_Status_Index[df$missing_count == 0], na.rm = TRUE), col = "red", lwd = 2)
+
+hist(df$Socio_Econ_Status_Index[df$missing_count == 0 &
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$Socio_Econ_Status_Index[df$missing_count == 0&
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], na.rm = TRUE), col = "black", lwd = 2)
+
+legend("topright", legend = c("Original Data", "Including in Read & Sci Model",
+                              "Including in Math Model"),
+       fill = c(col = "blue",col = "red", col = "black"),
+       cex = 0.8)
+```
+
+School Size
+
+```{r}
+hist(df$School_Size, col = rgb(0, 0, 0, 0.0), 
+     main = "Histogram of School_Size Comparison", 
+     xlab = "School_Size", border = "white",
+     breaks = 50,
+     freq = FALSE,
+     ylim = c(0,0.001))
+
+lines(density(df$School_Size, na.rm = TRUE), col = "blue", lwd = 2)
+
+hist(df$School_Size[df$missing_count == 0], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$School_Size[df$missing_count == 0], na.rm = TRUE), col = "red", lwd = 2)
+
+hist(df$School_Size[df$missing_count == 0 &
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$School_Size[df$missing_count == 0&
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], na.rm = TRUE), col = "black", lwd = 2)
+
+legend("topright", legend = c("Original Data", "Including in Read & Sci Model",
+                              "Including in Math Model"),
+       fill = c(col = "blue",col = "red", col = "black"),
+       cex = 0.8)
+```
+
+School_Student_Teacher_Ratio
+
+```{r}
+hist(df$School_Student_Teacher_Ratio, col = rgb(0, 0, 0, 0.0), 
+     main = "Histogram of School_Student_Teacher_Ratio Comparison", 
+     xlab = "School_Student_Teacher_Ratio", border = "white",
+     breaks = 50,
+     freq = FALSE,
+     ylim = c(0,0.1))
+
+lines(density(df$School_Student_Teacher_Ratio, na.rm = TRUE), col = "blue", lwd = 2)
+
+hist(df$School_Student_Teacher_Ratio[df$missing_count == 0], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$School_Student_Teacher_Ratio[df$missing_count == 0], na.rm = TRUE), col = "red", lwd = 2)
+
+hist(df$School_Student_Teacher_Ratio[df$missing_count == 0 &
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$School_Student_Teacher_Ratio[df$missing_count == 0&
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], na.rm = TRUE), col = "black", lwd = 2)
+
+legend("topright", legend = c("Original Data", "Including in Read & Sci Model",
+                              "Including in Math Model"),
+       fill = c(col = "blue",col = "red", col = "black"),
+       cex = 0.8)
+```
+
+Funding_by_Gov
+
+```{r}
+hist(df$Funding_by_Gov, col = rgb(0, 0, 0, 0.0), 
+     main = "Histogram of Funding_by_Gov Comparison", 
+     xlab = "Funding_by_Gov", border = "white",
+     breaks = 50,
+     freq = FALSE,
+     ylim = c(0,0.3))
+
+lines(density(df$Funding_by_Gov, na.rm = TRUE), col = "blue", lwd = 2)
+
+hist(df$Funding_by_Gov[df$missing_count == 0], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$Funding_by_Gov[df$missing_count == 0], na.rm = TRUE), col = "red", lwd = 2)
+
+hist(df$Funding_by_Gov[df$missing_count == 0 &
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$Funding_by_Gov[df$missing_count == 0&
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], na.rm = TRUE), col = "black", lwd = 2)
+
+legend("topright", legend = c("Original Data", "Including in Read & Sci Model",
+                              "Including in Math Model"),
+       fill = c(col = "blue",col = "red", col = "black"),
+       cex = 0.8)
+```
+
+Funding_by_Fee_or_Charge
+
+```{r}
+hist(df$Funding_by_Fee_or_Charge, col = rgb(0, 0, 0, 0.0), 
+     main = "Histogram of Funding_by_Fee_or_Charge Comparison", 
+     xlab = "Funding_by_Fee_or_Charge", border = "white",
+     breaks = 50,
+     freq = FALSE,
+     ylim = c(0,0.8))
+
+lines(density(df$Funding_by_Fee_or_Charge, na.rm = TRUE), col = "blue", lwd = 2)
+
+hist(df$Funding_by_Fee_or_Charge[df$missing_count == 0], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$Funding_by_Fee_or_Charge[df$missing_count == 0], na.rm = TRUE), col = "red", lwd = 2)
+
+hist(df$Funding_by_Fee_or_Charge[df$missing_count == 0 &
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], 
+     col = rgb(0, 0, 0, 0.0), 
+     add = TRUE, border = "white",
+     breaks = 50,
+     freq = FALSE)
+
+lines(density(df$Funding_by_Fee_or_Charge[df$missing_count == 0&
+                                  !df$Country %in% c("PRY", "KHM", "GTM","VNM")], na.rm = TRUE), col = "black", lwd = 2)
+
+legend("topright", legend = c("Original Data", "Including in Read & Sci Model",
+                              "Including in Math Model"),
+       fill = c(col = "blue",col = "red", col = "black"),
+       cex = 0.8)
+```
+
+### Categorical Variable
+
+School_Location_Urban.Rural_2
+
+```{r}
+tab_all <- table(df$School_Location_Urban.Rural_2)
+
+tab_clean <- table(df$School_Location_Urban.Rural_2[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$School_Location_Urban.Rural_2[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+```
+
+```{r}
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+International_Grade
+
+```{r}
+tab_all <- table(df$International_Grade)
+
+tab_clean <- table(df$International_Grade[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$International_Grade[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Education_Father
+
+```{r}
+tab_all <- table(df$Education_Father)
+
+tab_clean <- table(df$Education_Father[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Education_Father[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Education_Mother
+
+```{r}
+tab_all <- table(df$Education_Mother)
+
+tab_clean <- table(df$Education_Mother[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Education_Mother[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Occupation_Father_Category
+
+```{r}
+tab_all <- table(df$Occupation_Father_Category)
+
+tab_clean <- table(df$Occupation_Father_Category[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Occupation_Father_Category[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Occupation_Mother_Category
+
+```{r}
+tab_all <- table(df$Occupation_Mother_Category)
+
+tab_clean <- table(df$Occupation_Mother_Category[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Occupation_Mother_Category[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Resource_Household_Computer
+
+```{r}
+tab_all <- table(df$Resource_Household_Computer)
+
+tab_clean <- table(df$Resource_Household_Computer[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Resource_Household_Computer[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Resource_Household_Software
+
+```{r}
+tab_all <- table(df$Resource_Household_Software)
+
+tab_clean <- table(df$Resource_Household_Software[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Resource_Household_Software[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Resource_Household_Phone_Access_Internet
+
+```{r}
+tab_all <- table(df$Resource_Household_Phone_Access_Internet)
+
+tab_clean <- table(df$Resource_Household_Phone_Access_Internet[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Resource_Household_Phone_Access_Internet[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+Resource_Household_WIFI
+
+```{r}
+tab_all <- table(df$Resource_Household_WIFI)
+
+tab_clean <- table(df$Resource_Household_WIFI[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$Resource_Household_WIFI[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+School_Type
+
+```{r}
+tab_all <- table(df$School_Type)
+
+tab_clean <- table(df$School_Type[df$missing_count == 0])
+
+tab_clean_ex_country <- table(df$School_Type[df$missing_count == 0
+                                  & !df$Country %in% c("PRY", "KHM", "GTM","VNM")]
+                              )
+
+par(mfrow = c(1, 3))
+
+pie(tab_all, 
+    main = "Original Data", 
+    col = rainbow(length(tab_all)),
+    labels = paste0(names(tab_all), "\n", round(100*tab_all/sum(tab_all), 1), "%"))
+
+pie(tab_clean, 
+    main = "Including in Read & Sci Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+
+pie(tab_clean_ex_country, 
+    main = "Including in Math Model", 
+    col = rainbow(length(tab_clean)), 
+    labels = paste0(names(tab_clean), "\n", round(100*tab_clean/sum(tab_clean), 1), "%"))
+```
+
+# Regression Model (Mathematics)
+
+```{r}
+math_all <- lm(Math_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df)
+
+summary(math_all)
+```
+
+```{r}
+confint(math_all)
+```
+
+For Girl
+
+```{r}
+math_girl <- lm(Math_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df,
+                 subset = Gender == 'girl')
+
+summary(math_girl)
+```
+
+```{r}
+confint(math_girl)
+```
+
+For Boy
+
+```{r}
+math_boy <- lm(Math_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df,
+                 subset = Gender == 'boy')
+
+summary(math_boy)
+```
+
+```{r}
+confint(math_boy)
+```
+
+# Diagnostic Regression (Mathematics)
+
+We will diagnose Full model (math_all) by 3 aspects
+
+1.  Plot Residual vs Fitted Value -\> Can Observe linearity and constant residual variance
+2.  Q-Q plot -\> Can Observe residual distribution is normal distribution or not
+3.  VIF -\> For Detect Multicollinearity problem
+
+## Plot Residual vs Fitted Value
+
+```{r}
+df_plot <- data.frame(
+  fitted = math_all$fitted.values,
+  residuals = math_all$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+# Plot
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+```{r}
+par(mfrow = c(1,2))
+
+# Girl 
+df_plot <- data.frame(
+  fitted = math_girl$fitted.values,
+  residuals = math_girl$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted For Girl (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+```{r}
+
+# Boy 
+df_plot <- data.frame(
+  fitted = math_boy$fitted.values,
+  residuals = math_boy$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) + 
+  labs(title = "Residuals vs Fitted For Boy (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+We Found residual have curve trend with fitted value and expected value of residual not equal zero every fitted value, then linearity assumption violated so regression line not good fit with data but the consequence not impact to standard error of beta.
+
+But if we consider the variance of residual, we found variance is increase at high fitted value. Constant Variance of residual assumption violated and impact to false standard error.
+
+## Q-Q Plot
+
+```{r}
+set.seed(123)
+red_sampling <- sample(math_all$residuals,5000)
+
+qqnorm(red_sampling, main = "Normal Q-Q For Residual (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+```
+
+```{r}
+par(mfrow = c(1,2))
+
+# Left 
+set.seed(123)
+red_sampling <- sample(math_girl$residuals,5000)
+
+qqnorm(red_sampling, main = "Q-Q  For Girl (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+
+# Right
+set.seed(123)
+red_sampling <- sample(math_boy$residuals,5000)
+
+qqnorm(red_sampling, main = "Q-Q For Boy (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+```
+
+Residual from math_full_2 distribution nearly like normal distribution but have long left tail. Normality Assumption still fine.
+
+## VIF
+
+```{r}
+car::vif(math_all)
+```
+
+```{r}
+car::vif(math_girl)
+```
+
+```{r}
+car::vif(math_boy)
+```
+
+Every Independence variable pass rule of trump (VIF \< 10).
+
+# Regression Model (Reading)
+
+```{r}
+reading_all <- lm(Reading_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df)
+
+summary(reading_all)
+```
+
+```{r}
+confint(reading_all)
+```
+
+For Girl
+
+```{r}
+reading_girl <- lm(Reading_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df,
+                 subset = Gender == 'girl')
+
+summary(reading_girl)
+```
+
+```{r}
+confint(reading_girl)
+```
+
+For Boy
+
+```{r}
+reading_boy <- lm(Reading_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df,
+                 subset = Gender == 'boy')
+
+summary(reading_boy)
+```
+
+```{r}
+confint(reading_boy)
+```
+
+# Diagnostic Regression (Reading)
+
+We will diagnose Full model (math_all) by 3 aspects
+
+1.  Plot Residual vs Fitted Value -\> Can Observe linearity and constant residual variance
+2.  Q-Q plot -\> Can Observe residual distribution is normal distribution or not
+3.  VIF -\> For Detect Multicollinearity problem
+
+## Plot Residual vs Fitted Value
+
+```{r}
+df_plot <- data.frame(
+  fitted = reading_all$fitted.values,
+  residuals = reading_all$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+# Plot
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+```{r}
+df_plot <- data.frame(
+  fitted = reading_girl$fitted.values,
+  residuals = reading_girl$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+# Plot
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted For Girl (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+```{r}
+df_plot <- data.frame(
+  fitted = reading_boy$fitted.values,
+  residuals = reading_boy$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+# Plot
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted For Boy (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+Reading Model Have same problem with Math Model
+
+## Q-Q Plot
+
+```{r}
+set.seed(123)
+red_sampling <- sample(reading_all$residuals,5000)
+
+qqnorm(red_sampling, main = "Normal Q-Q For Residual (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+```
+
+```{r}
+par(mfrow = c(1,2))
+
+# Left 
+set.seed(123)
+red_sampling <- sample(reading_girl$residuals,5000)
+
+qqnorm(red_sampling, main = "Q-Q For Girl (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+
+# Right
+set.seed(123)
+red_sampling <- sample(reading_boy$residuals,5000)
+
+qqnorm(red_sampling, main = "Q-Q For Boy (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+```
+
+Reading Model Not violated normality assumption like math model
+
+## VIF
+
+```{r}
+car::vif(reading_all)
+```
+
+```{r}
+car::vif(reading_girl)
+```
+
+```{r}
+car::vif(reading_boy)
+```
+
+Every Independence variable pass rule of trump (VIF \< 10).
+
+# Regression Model (Science)
+
+```{r}
+science_all <- lm(Science_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df)
+
+summary(science_all)
+```
+
+```{r}
+confint(science_all)
+```
+
+For Girl
+
+```{r}
+science_girl <- lm(Science_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df,
+                 subset = Gender == 'girl')
+
+summary(science_girl)
+```
+
+```{r}
+confint(science_girl)
+```
+
+For Boy
+
+```{r}
+science_boy <- lm(Science_Score
+                 ~ School_Location_Urban.Rural_2
+                 + International_Grade
+                 + Socio_Econ_Status_Index
+                 + Education_Father
+                 + Education_Mother
+                 + Occupation_Father_Category
+                 + Occupation_Mother_Category
+                 + Resource_Household_Computer
+                 + Resource_Household_Software
+                 + Resource_Household_Phone_Access_Internet
+                 + Resource_Household_WIFI
+                 + School_Type
+                 + School_Size
+                 + School_Student_Teacher_Ratio
+                 + Funding_by_Gov
+                 + Funding_by_Fee_or_Charge,
+                 data = df,
+                 subset = Gender == 'boy')
+
+summary(science_boy)
+```
+
+```{r}
+confint(science_boy)
+```
+
+# Diagnostic Regression (Science)
+
+We will diagnose Full model by 3 aspects
+
+1.  Plot Residual vs Fitted Value -\> Can Observe linearity and constant residual variance
+2.  Q-Q plot -\> Can Observe residual distribution is normal distribution or not
+3.  VIF -\> For Detect Multicollinearity problem
+
+## Plot Residual vs Fitted Value
+
+```{r}
+df_plot <- data.frame(
+  fitted = science_all$fitted.values,
+  residuals = science_all$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+# Plot
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+```{r}
+df_plot <- data.frame(
+  fitted = science_girl$fitted.values,
+  residuals = science_girl$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+# Plot
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted For Girl (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+```{r}
+df_plot <- data.frame(
+  fitted = science_boy$fitted.values,
+  residuals = science_boy$residuals
+)
+
+set.seed(123)
+df_sample <- df_plot[sample(nrow(df_plot), 5000), ]
+
+# Plot
+ggplot(df_sample, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) + 
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted For Boy (Sampled 5,000 points)",
+       x = "Fitted values",
+       y = "Residuals") +
+  theme_minimal()
+```
+
+Science Model Have same problem with Math Model
+
+## Q-Q Plot
+
+```{r}
+set.seed(123)
+red_sampling <- sample(science_all$residuals,5000)
+
+qqnorm(red_sampling, main = "Normal Q-Q For Residual (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+```
+
+```{r}
+par(mfrow = c(1,2))
+
+# Left 
+set.seed(123)
+red_sampling <- sample(science_girl$residuals,5000)
+
+qqnorm(red_sampling, main = "Q-Q For Girl (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+
+# Right
+set.seed(123)
+red_sampling <- sample(science_boy$residuals,5000)
+
+qqnorm(red_sampling, main = "Q-Q For Boy (Sampled 5,000 pts)"
+       , pch = 20, col = rgb(0,0,0,0.2))
+qqline(red_sampling, col = "red", lwd = 2)
+```
+
+Residual form science model have long tail distribution but when n is large, this problem still ok
+
+## VIF
+
+```{r}
+car::vif(science_all)
+```
+
+```{r}
+car::vif(science_girl)
+```
+
+```{r}
+car::vif(science_boy)
+```
+
+Every Independence variable pass rule of trump (VIF \< 10).
